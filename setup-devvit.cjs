@@ -1,131 +1,105 @@
-// setup-devvit.js - Devvit project setup script for Node.js
-// This script performs checks and runs 'npm run dev'.
-// It uses Node.js's built-in modules and has no external dependencies.
-
+// setup-devvit.cjs - Devvit project setup script
 const fs = require('fs');
 const path = require('path');
 const { execSync, exec } = require('child_process');
 const os = require('os');
+const yaml = require('yaml');
 
-// Function to print error messages in red to the console
-function error(msg) {
-  // Using ANSI escape codes for red text: \x1b[0;31m for red, \x1b[0m to reset
-  console.error(`\x1b[0;31mERROR:\x1b[0m ${msg}`);
-  process.exit(1); // Exit the script with an error code
-}
-
-// Function to print success messages in green to the console
-function success(msg) {
-  // Using ANSI escape codes for green text: \x1b[0;32m for green, \x1b[0m to reset
-  console.log(`\x1b[0;32m${msg}\x1b[0m`);
-}
-
-// --- Main script execution ---
-
-console.log('Starting Devvit project setup checks...');
-
-// 1. Check devvit.yaml for 'YOUR_APP_NAME' placeholder
-try {
-  const devvitYamlContent = fs.readFileSync('devvit.yaml', 'utf8');
-  if (devvitYamlContent.includes('YOUR_APP_NAME')) {
-    error("devvit.yaml contains 'YOUR_APP_NAME'. Please update devvit.yaml with your actual app name before proceeding.");
+function generateRandomSuffix(length) {
+  const letters = 'abcdefghijklmnopqrstuvwxyz';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += letters.charAt(Math.floor(Math.random() * letters.length));
   }
-  console.log('devvit.yaml check passed.');
-} catch (e) {
-  if (e.code === 'ENOENT') {
-    error("devvit.yaml not found. Please ensure it exists in the current directory.");
-  } else {
-    error(`Error reading devvit.yaml: ${e.message}`);
+  return result;
+}
+
+function updateDevvitName() {
+  const devvitYamlPath = path.join(process.cwd(), 'devvit.yaml');
+  const content = fs.readFileSync(devvitYamlPath, 'utf8');
+  const parsedYaml = yaml.parse(content);
+  
+  if (parsedYaml.name === 'YOUR_APP_NAME') {
+    const suffix = generateRandomSuffix(6);
+    parsedYaml.name = `bolt-${suffix}`;
+    fs.writeFileSync(devvitYamlPath, yaml.stringify(parsedYaml));
+    console.log(`Updated app name to bolt-${suffix}`);
   }
 }
 
-// 2. Check package.json dev:devvit command for 'YOUR_SUBREDDIT_NAME' placeholder
-try {
-  const packageJsonContent = fs.readFileSync('package.json', 'utf8');
-  const packageJson = JSON.parse(packageJsonContent);
+async function runChecks() {
+  let allPassed = true;
+  const checks = [];
 
-  const devScript = packageJson.scripts && packageJson.scripts['dev:devvit'];
-
-  if (!devScript) {
-    error("No 'dev:devvit' script found in package.json. Please ensure it's defined.");
-  }
-
-  if (devScript.includes('YOUR_SUBREDDIT_NAME')) {
-    error("package.json dev:devvit script contains 'YOUR_SUBREDDIT_NAME'. Please update package.json with your subreddit name before proceeding.");
-  }
-  console.log('package.json dev:devvit script check passed.');
-} catch (e) {
-  if (e.code === 'ENOENT') {
-    error("package.json not found. Please ensure it exists in the current directory.");
-  } else if (e instanceof SyntaxError) {
-    error(`Error parsing package.json: It might be malformed JSON. ${e.message}`);
-  } else {
-    error(`Error checking package.json: ${e.message}`);
-  }
-}
-
-// 3. Check if user is logged in to Devvit (by checking for token file)
-try {
+  // Check 1: Devvit login
   const devvitTokenPath = path.join(os.homedir(), '.devvit', 'token');
-  if (!fs.existsSync(devvitTokenPath)) {
-    error(`You're not logged in to Reddit. Please log in to devvit (run 'npm run login') before proceeding.`);
-  }
-  console.log('Devvit login token check passed.');
-} catch (e) {
-  error(`Error checking Devvit login token: ${e.message}`);
+  const isLoggedIn = fs.existsSync(devvitTokenPath);
+  checks.push({
+    name: 'Authentication',
+    passed: isLoggedIn,
+    message: isLoggedIn ? "You're logged in to Devvit!" : 'Please run npm run login to authenticate with Reddit'
+  });
+
+  // Check 2: App upload check
+  const uploadedPath = path.join(process.cwd(), '.initialized');
+  const isUploaded = fs.existsSync(uploadedPath);
+  checks.push({
+    name: 'App initialization',
+    passed: isUploaded,
+    message: isUploaded ? 'App has been initialized' : 'Please run npm run devvit:initialize to upload your app'
+  });
+
+  // Check 3: Subreddit configuration
+  const packageJsonPath = path.join(process.cwd(), 'package.json');
+  const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+  const packageJson = JSON.parse(packageJsonContent);
+  const devScript = packageJson.scripts && packageJson.scripts['dev:devvit'];
+  const hasSubreddit = devScript && !devScript.includes('YOUR_SUBREDDIT_NAME');
+  checks.push({
+    name: 'Playtest subreddit',
+    passed: hasSubreddit,
+    message: hasSubreddit ? 'Subreddit is configured!' : 'Please update YOUR_SUBREDDIT_NAME in the dev:devvit script in package.json'
+  });
+
+  // Print check results
+  checks.forEach(check => {
+    const emoji = check.passed ? '✅' : '❌';
+    console.log(`${emoji}  ${check.name}: ${check.message}`);
+    if (!check.passed) allPassed = false;
+  });
+
+  return allPassed;
 }
 
-// All checks passed
-success('All preliminary checks passed. Devvit setup is ready!');
-console.log('Attempting to run `npm run deploy`...');
+async function main() {
+  try {
+    // Step 1: Update devvit.yaml name
+    updateDevvitName();
 
-// 4. Execute 'npm run deploy' first
-const deployProcess = exec('npm run devvit:upload', (error, stdout, stderr) => {
-  if (error) {
-    console.error(`\x1b[0;31mError executing 'npm run deploy':\x1b[0m\n${stderr}`);
-    process.exit(1);
-  }
-  console.log(`stdout: ${stdout}`);
-  console.error(`stderr: ${stderr}`);
-  // After successful deploy, run dev:all
-  runDevAll();
-});
+    // Step 2: Run checks
+    const checksPass = await runChecks();
 
-deployProcess.stdout.pipe(process.stdout);
-deployProcess.stderr.pipe(process.stderr);
+    // Step 3: If all checks pass, run dev:all
+    if (checksPass) {
+      console.log('\nAll checks passed! Starting development server...');
+      const devProcess = exec('npm run dev:all', (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Error running dev:all: ${error.message}`);
+          process.exit(1);
+        }
+      });
 
-deployProcess.on('close', (code) => {
-  if (code !== 0) {
-    console.error(`\x1b[0;31m'npm run deploy' process exited with code ${code}\x1b[0m`);
-    process.exit(1);
-  }
-});
-
-deployProcess.on('error', (err) => {
-  error(`Failed to start 'npm run deploy' process: ${err.message}`);
-});
-
-function runDevAll() {
-  console.log('Attempting to run `npm run dev:all`...');
-  const npmProcess = exec('npm run dev:all', (error, stdout, stderr) => {
-    if (error) {
-      console.error(`\x1b[0;31mError executing 'npm run dev:all':\x1b[0m\n${stderr}`);
+      devProcess.stdout.pipe(process.stdout);
+      devProcess.stderr.pipe(process.stderr);
+    } else {
+      console.log('\nPlease fix the issues above and try again.');
       process.exit(1);
     }
-    console.log(`stdout: ${stdout}`);
-    console.error(`stderr: ${stderr}`);
-  });
-  npmProcess.stdout.pipe(process.stdout);
-  npmProcess.stderr.pipe(process.stderr);
-  npmProcess.on('close', (code) => {
-    if (code !== 0) {
-      console.error(`\x1b[0;31m'npm run dev:all' process exited with code ${code}\x1b[0m`);
-    } else {
-      success(`'npm run dev:all' process exited successfully.`);
-    }
-  });
-  npmProcess.on('error', (err) => {
-    error(`Failed to start 'npm run dev:all' process: ${err.message}`);
-  });
+  } catch (error) {
+    console.error('Error:', error.message);
+    process.exit(1);
+  }
 }
+
+main();
 
