@@ -68,7 +68,7 @@ try {
 try {
   const devvitTokenPath = path.join(os.homedir(), '.devvit', 'token');
   if (!fs.existsSync(devvitTokenPath)) {
-    error(`Devvit login token not found at ${devvitTokenPath}. Please log in to devvit (run 'devvit login') before proceeding.`);
+    error(`You're not logged in to Reddit. Please log in to devvit (run 'npm run login') before proceeding.`);
   }
   console.log('Devvit login token check passed.');
 } catch (e) {
@@ -77,39 +77,55 @@ try {
 
 // All checks passed
 success('All preliminary checks passed. Devvit setup is ready!');
-console.log('Attempting to run `npm run dev`...');
+console.log('Attempting to run `npm run deploy`...');
 
-// 4. Execute 'npm run dev'
-// Using `exec` for simplicity, allowing it to run in a new shell.
-// `exec` is suitable for short-lived commands that don't require complex I/O streaming.
-const npmProcess = exec('npm run dev', (error, stdout, stderr) => {
+// 4. Execute 'npm run deploy' first
+const deployProcess = exec('npm run devvit:upload', (error, stdout, stderr) => {
   if (error) {
-    console.error(`\x1b[0;31mError executing 'npm run dev':\x1b[0m\n${stderr}`);
+    console.error(`\x1b[0;31mError executing 'npm run deploy':\x1b[0m\n${stderr}`);
     process.exit(1);
   }
-  // This callback might not be hit if `npm run dev` is a long-running process
-  // that doesn't exit immediately. For development servers, it usually keeps running.
-  // The output will be streamed to the console if the process is detached.
   console.log(`stdout: ${stdout}`);
-  console.error(`stderr: ${stderr}`); // Use console.error for stderr
+  console.error(`stderr: ${stderr}`);
+  // After successful deploy, run dev:all
+  runDevAll();
 });
 
-// Optionally, pipe the child process's stdout and stderr to the parent process's console
-// This makes the output of `npm run dev` visible in real-time
-npmProcess.stdout.pipe(process.stdout);
-npmProcess.stderr.pipe(process.stderr);
+deployProcess.stdout.pipe(process.stdout);
+deployProcess.stderr.pipe(process.stderr);
 
-// Listen for the child process to close (if it ever does)
-npmProcess.on('close', (code) => {
+deployProcess.on('close', (code) => {
   if (code !== 0) {
-    console.error(`\x1b[0;31m'npm run dev' process exited with code ${code}\x1b[0m`);
-  } else {
-    success(`'npm run dev' process exited successfully.`);
+    console.error(`\x1b[0;31m'npm run deploy' process exited with code ${code}\x1b[0m`);
+    process.exit(1);
   }
 });
 
-// Listen for errors on the child process itself (e.g., command not found)
-npmProcess.on('error', (err) => {
-  error(`Failed to start 'npm run dev' process: ${err.message}`);
+deployProcess.on('error', (err) => {
+  error(`Failed to start 'npm run deploy' process: ${err.message}`);
 });
+
+function runDevAll() {
+  console.log('Attempting to run `npm run dev:all`...');
+  const npmProcess = exec('npm run dev:all', (error, stdout, stderr) => {
+    if (error) {
+      console.error(`\x1b[0;31mError executing 'npm run dev:all':\x1b[0m\n${stderr}`);
+      process.exit(1);
+    }
+    console.log(`stdout: ${stdout}`);
+    console.error(`stderr: ${stderr}`);
+  });
+  npmProcess.stdout.pipe(process.stdout);
+  npmProcess.stderr.pipe(process.stderr);
+  npmProcess.on('close', (code) => {
+    if (code !== 0) {
+      console.error(`\x1b[0;31m'npm run dev:all' process exited with code ${code}\x1b[0m`);
+    } else {
+      success(`'npm run dev:all' process exited successfully.`);
+    }
+  });
+  npmProcess.on('error', (err) => {
+    error(`Failed to start 'npm run dev:all' process: ${err.message}`);
+  });
+}
 
