@@ -46,7 +46,7 @@ async function runChecks() {
   checks.push({
     name: 'App initialization',
     passed: isUploaded,
-    message: isUploaded ? 'App has been initialized' : 'Please run npm run devvit:initialize to upload your app'
+    message: isUploaded ? 'App has been initialized' : 'Please run npm run devvit:init to setup your app remotely'
   });
 
   // Check 3: Subreddit configuration
