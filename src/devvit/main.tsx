@@ -7,10 +7,9 @@ import { postConfigNew } from '../server/core/post';
 
 defineConfig({
   name: 'Word Guesser',
-  description: 'Can you guess the word?',
   entry: 'index.html',
   height: 'tall',
-  menu: { enable: false }
+  menu: { enable: false },
   // TODO: Cannot use without ability to pass in more metadata
   // menu: {
   //   enable: true,
@@ -60,7 +59,6 @@ Devvit.addMenuItem({
         preview: <Preview />,
       });
       await postConfigNew({
-        ctx: context,
         postId: post.id,
       });
       ui.showToast({ text: 'Created post!' });
