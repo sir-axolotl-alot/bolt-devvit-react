@@ -17,7 +17,6 @@
     "lint": "eslint ./src",
     "lint:fix": "eslint --fix ./src",
     "login": "devvit login --copy-paste",
-    "login": "devvit login --copy-paste",
     "prettier": "prettier-package-json --write ./package.json && prettier --write .",
     "type-check": "tsc --build"
   },
